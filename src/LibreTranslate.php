@@ -8,6 +8,8 @@
 declare(strict_types=1);
 namespace Jefs42;
 
+use Exception;
+
 class LibreTranslate
 {
     /** @var string The API Key to be used for requests */
@@ -149,10 +151,8 @@ class LibreTranslate
     */
     public function Translate($text, $source = null, $target = null) {
         // TODO: if source or target passed, validate against known available languages
-        $isMulti = false; // check if text passed is single or array
         if (is_array($text)) {
-            $isMulti = true;
-            $text = urlencode(json_encode($text));
+            $text = array_values($text);
         }
 
         $data = [
@@ -161,6 +161,7 @@ class LibreTranslate
             'source' => !is_null($source) ? $source : $this->sourceLanguage,
             'target' => !is_null($target) ? $target : $this->targetLanguage
         ];
+
         if (!is_null($this->apiKey)) {
             $data['api_key'] = $this->apiKey;
         }
@@ -168,11 +169,6 @@ class LibreTranslate
         $response = $this->_doRequest('/translate', $data);
 
         if (is_object($response) && isset($response->translatedText)) {
-            // return array of translations if input was array
-            if ($isMulti) {
-                return (json_decode(urldecode($response->translatedText),true));
-            }
-            // else return single translation
             return $response->translatedText;
         } else {
             if (isset($response->error)) {
@@ -312,17 +308,24 @@ class LibreTranslate
         $this->lastError = '';
         $finalEndpoint = $this->apiBase . ( !is_null($this->apiPort) ? ':' . $this->apiPort : '' ) . $endpoint;
         $ch = \curl_init($finalEndpoint);
+
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER => false,
+            CURLOPT_RETURNTRANSFER => True,
+            // CURLOPT_HEADER => false,
             CURLOPT_CUSTOMREQUEST => $type,
-            CURLOPT_POSTFIELDS => $data,
+            CURLOPT_POSTFIELDS => json_encode($data),
+            CURLOPT_HTTPHEADER => array('Content-Type: application/json')
         ]);
+
         $response = curl_exec($ch);
-        $responseInfo = curl_getinfo($ch);
-        if (curl_errno($ch) != 0) {
-            throw new \Exception(curl_error($ch), curl_errno($ch));
+        $errno = curl_errno($ch);
+
+        if ($errno != 0) {
+            throw new \Exception(curl_error($ch), $errno);
         }
+
+        curl_close($ch);
+
         return json_decode($response);
     }
 }
